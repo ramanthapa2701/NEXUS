@@ -54,4 +54,53 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// LOG/UPDATE today's entry for a habit
+router.post('/:id/log', authMiddleware, async (req, res) => {
+  try {
+    const { log_date, value, completed } = req.body;
+    const habitId = req.params.id;
+
+    const habitResult = await pool.query('SELECT * FROM habits WHERE id=$1 AND user_id=$2', [habitId, req.userId]);
+    if (habitResult.rows.length === 0) return res.status(404).json({ error: 'Habit not found' });
+
+    const habit = habitResult.rows[0];
+    let completionPercent = 0;
+
+    if (habit.type === 'numeric') {
+      completionPercent = Math.min((value / habit.goal_value) * 100, 100);
+    } else {
+      completionPercent = completed ? 100 : 0;
+    }
+
+    const result = await pool.query(
+      `INSERT INTO habit_logs (habit_id, log_date, value, completed, completion_percent)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (habit_id, log_date)
+       DO UPDATE SET value=$3, completed=$4, completion_percent=$5
+       RETURNING *`,
+      [habitId, log_date, value || null, completed || null, completionPercent]
+    );
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET all logs for a habit
+router.get('/:id/logs', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT hl.* FROM habit_logs hl
+       JOIN habits h ON hl.habit_id = h.id
+       WHERE hl.habit_id=$1 AND h.user_id=$2
+       ORDER BY hl.log_date DESC`,
+      [req.params.id, req.userId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
