@@ -4,7 +4,6 @@ const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
 
-// GET all habits for logged-in user
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM habits WHERE user_id = $1 ORDER BY id', [req.userId]);
@@ -14,7 +13,6 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
-// CREATE a new habit
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const { name, type, goal_value, weight } = req.body;
@@ -28,7 +26,6 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
-// UPDATE a habit
 router.put('/:id', authMiddleware, async (req, res) => {
   try {
     const { name, type, goal_value, weight } = req.body;
@@ -43,7 +40,6 @@ router.put('/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// DELETE a habit
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query('DELETE FROM habits WHERE id=$1 AND user_id=$2 RETURNING *', [req.params.id, req.userId]);
@@ -54,7 +50,6 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// LOG/UPDATE today's entry for a habit
 router.post('/:id/log', authMiddleware, async (req, res) => {
   try {
     const { log_date, value, completed } = req.body;
@@ -87,7 +82,6 @@ router.post('/:id/log', authMiddleware, async (req, res) => {
   }
 });
 
-// GET all logs for a habit
 router.get('/:id/logs', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
