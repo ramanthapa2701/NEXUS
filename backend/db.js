@@ -1,36 +1,16 @@
-const { Sequelize } = require('sequelize');
-const dotenv = require('dotenv');
+const { Pool } = require('pg');
+const types = require('pg').types;
+require('dotenv').config();
 
-dotenv.config();
+types.setTypeParser(1082, (val) => val);
 
-// Initialize Sequelize connection pool mapping to your exact .env variables
-const sequelize = new Sequelize(
-  process.env.DB_NAME, 
-  process.env.DB_USER, 
-  process.env.DB_PASSWORD, 
-  {
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT || 5432,
-    dialect: 'postgres',
-    logging: false, // Keeps your terminal output clean
-    pool: {
-      max: 5,
-      min: 0,
-      acquire: 30000,
-      idle: 10000
-    }
-  }
-);
+const pool = new Pool({
+  user: process.env.DB_USER,
+  host: process.env.DB_HOST,
+  database: process.env.DB_NAME,
+  password: process.env.DB_PASSWORD,
+  port: process.env.DB_PORT,
+  ssl: { rejectUnauthorized: false },
+});
 
-const checkConnection = async () => {
-  try {
-    await sequelize.authenticate();
-    console.log('🚀 Nexus Database connected smoothly to PostgreSQL');
-  } catch (error) {
-    console.error('❌ PostgreSQL Connection Failure Error:', error.message);
-  }
-};
-
-checkConnection();
-
-module.exports = sequelize;
+module.exports = pool;
