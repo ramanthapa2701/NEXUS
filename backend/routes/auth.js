@@ -1,54 +1,89 @@
 const express = require('express');
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-const pool = require('../db');
-
 const router = express.Router();
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
 
-// SIGNUP
+const JWT_SECRET = process.env.JWT_SECRET || 'nexus_super_secret_2026';
+
+// ==========================================
+// ROUTE 1: REGISTER NEW USER (POST /api/auth/signup)
+// ==========================================
 router.post('/signup', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { username, password } = req.body;
 
-    const existingUser = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    if (existingUser.rows.length > 0) {
-      return res.status(400).json({ error: 'User already exists' });
+    // Validate request inputs
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Check if user already exists in your database table
+    const existingUser = await User.findOne({ where: { username } });
+    if (existingUser) {
+      return res.status(400).json({ error: 'Username is already taken' });
+    }
 
-    const newUser = await pool.query(
-      'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email',
-      [name, email, hashedPassword]
-    );
+    // Securely hash the plain text password before database insertion
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
-    res.status(201).json(newUser.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    // Save user to database
+    const newUser = await User.create({
+      username,
+      password: hashedPassword
+    });
+
+    // Sign the JWT deployment token for automatic user onboarding authentication
+    const token = jwt.sign({ userId: newUser.id }, JWT_SECRET, { expiresIn: '7d' });
+
+    res.status(201).json({ 
+      message: 'Account created successfully', 
+      token, 
+      username: newUser.username 
+    });
+
+  } catch (error) {
+    console.error('Signup Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
-// LOGIN
+// ==========================================
+// ROUTE 2: USER LOGIN AUTHENTICATION (POST /api/auth/login)
+// ==========================================
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { username, password } = req.body;
 
-    const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    if (userResult.rows.length === 0) {
-      return res.status(400).json({ error: 'Invalid email or password' });
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    const user = userResult.rows[0];
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) {
-      return res.status(400).json({ error: 'Invalid email or password' });
+    // Lookup user profile by username match
+    const user = await User.findOne({ where: { username } });
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid login credentials' });
     }
 
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    // Compare incoming password with encrypted database hash
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Invalid login credentials' });
+    }
 
-    res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    // Issue new verification token payload access keys
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+
+    res.json({ 
+      message: 'Logged in successfully', 
+      token, 
+      username: user.username 
+    });
+
+  } catch (error) {
+    console.error('Login Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 

@@ -1,24 +1,45 @@
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config();
-const pool = require('./db');
+const dotenv = require('dotenv');
+const sequelize = require('./db');
+
+// Route Imports
 const authRoutes = require('./routes/auth');
-const habitRoutes = require('./routes/habits');
 const taskRoutes = require('./routes/tasks');
 
+// Initialize environment configuration
+dotenv.config();
+
 const app = express();
-app.use(cors());
+
+// Configure Global Cross-Origin Resource Sharing for Local Network Devices
+app.use(cors({
+  origin: '*', // Allows access from your mobile phone viewport framework
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Standard Body Parser Middleware
 app.use(express.json());
 
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'NEXUS backend is running' });
-});
-
+// Main Routing Matrix Middleware Hub
 app.use('/api/auth', authRoutes);
-app.use('/api/habits', habitRoutes);
 app.use('/api/tasks', taskRoutes);
 
+// Database Synchronicity Engine Hook
+sequelize.sync()
+  .then(() => {
+    console.log('✔ All PostgreSQL database schema tables synced perfectly');
+  })
+  .catch((err) => {
+    console.error('❌ Database Sync Matrix Failure:', err);
+  });
+
+// Server Listener Port Binding Configuration
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+
+// Host '0.0.0.0' forces Node to listen to local network routers rather than just localhost
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 NEXUS Server running globally on port ${PORT}`);
+  console.log(`📡 Local Network Broadcast Target Area: http://192.168.1.17:${PORT}`);
 });

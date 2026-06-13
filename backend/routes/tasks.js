@@ -1,56 +1,85 @@
 const express = require('express');
-const pool = require('../db');
-const authMiddleware = require('../middleware/auth');
-
 const router = express.Router();
+const Goal = require('../models/Goal');
+const auth = require('../middleware/auth');
 
-// GET all tasks for logged-in user
-router.get('/', authMiddleware, async (req, res) => {
+// GET ALL TASKS
+router.get('/', auth, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM tasks WHERE user_id = $1 ORDER BY id DESC', [req.userId]);
-    res.json(result.rows);
+    const records = await Goal.findAll({ 
+      where: { userId: req.user.userId } 
+    });
+    res.json(records);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Error:', err);
+    res.status(500).json({ error: 'Database read error' });
   }
 });
 
-// CREATE a new task
-router.post('/', authMiddleware, async (req, res) => {
+// CREATE A FRESH TASK
+router.post('/', auth, async (req, res) => {
   try {
-    const { name, priority, status, deadline } = req.body;
-    const result = await pool.query(
-      'INSERT INTO tasks (user_id, name, priority, status, deadline) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [req.userId, name, priority || 'Medium', status || 'Pending', deadline || null]
-    );
-    res.status(201).json(result.rows[0]);
+    const { text, type, target, unit, assignedDays } = req.body;
+
+    const newRow = await Goal.create({
+      userId: req.user.userId,
+      text,
+      type,
+      target: type === 'checkbox' ? 0 : parseFloat(target) || 0,
+      unit: type === 'checkbox' ? '' : unit,
+      assignedDays
+    });
+
+    res.status(201).json(newRow);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Error:', err);
+    res.status(500).json({ error: 'Database write error' });
   }
 });
 
-// UPDATE a task
-router.put('/:id', authMiddleware, async (req, res) => {
+// UPDATE TASK METRICS
+router.patch('/:id', auth, async (req, res) => {
   try {
-    const { name, priority, status, deadline } = req.body;
-    const result = await pool.query(
-      'UPDATE tasks SET name=$1, priority=$2, status=$3, deadline=$4 WHERE id=$5 AND user_id=$6 RETURNING *',
-      [name, priority, status, deadline, req.params.id, req.userId]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Task not found' });
-    res.json(result.rows[0]);
+    const targetRow = await Goal.findOne({
+      where: {
+        id: req.params.id,
+        userId: req.user.userId
+      }
+    });
+
+    if (!targetRow) {
+      return res.status(404).json({ error: 'Record missing' });
+    }
+
+    if (req.body.current !== undefined) targetRow.current = req.body.current;
+    if (req.body.completed !== undefined) targetRow.completed = req.body.completed;
+
+    await targetRow.save();
+    res.json(targetRow);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Error:', err);
+    res.status(500).json({ error: 'Database update error' });
   }
 });
 
-// DELETE a task
-router.delete('/:id', authMiddleware, async (req, res) => {
+// DELETE ROUTE
+router.delete('/:id', auth, async (req, res) => {
   try {
-    const result = await pool.query('DELETE FROM tasks WHERE id=$1 AND user_id=$2 RETURNING *', [req.params.id, req.userId]);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Task not found' });
-    res.json({ message: 'Task deleted' });
+    const droppedCount = await Goal.destroy({
+      where: {
+        id: req.params.id,
+        userId: req.user.userId
+      }
+    });
+
+    if (droppedCount === 0) {
+      return res.status(404).json({ error: 'Record missing' });
+    }
+
+    res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Error:', err);
+    res.status(500).json({ error: 'Database deletion error' });
   }
 });
 
