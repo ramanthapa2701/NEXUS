@@ -1,23 +1,15 @@
 import axios from 'axios';
 
-// Instantiate Axios targeting your computer's specific network node address
-const API = axios.create({
-  baseURL: 'http://192.168.1.17:5000/api',
-  timeout: 10000, // Safe connection threshold window
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL,
 });
 
-// Outbound Requests Interceptor for Persistent Token Evaluation
-API.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('nexus_user_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
-);
+  return config;
+});
 
-export default API;
+export default api;
